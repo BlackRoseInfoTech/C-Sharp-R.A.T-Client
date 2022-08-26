@@ -519,7 +519,7 @@ namespace TutClient
                 {
                     attempts++; //1 more attempt
                     Console.WriteLine("Connection attempt " + attempts );
-                    Console.WriteLine("Connection attempt " + attempts + $": {_ips_r[changeIp]}");
+                    //Console.WriteLine("Connection attempt " + attempts + $": {_ips_r[changeIp]}");
                     var port = _PORT;
                     if (_ips_r[changeIp].Split(':').Count() > 1)
                     {
